@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureChat</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:Arial, sans-serif; }
+body { background:#0a0a0a; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+
+/* --- Login Screen --- */
+#loginScreen { width:100%; max-width:400px; padding:30px; background:#1a1a1a; border-radius:20px; text-align:center; color:white; display:block; }
+#loginScreen input { width:100%; padding:12px; margin:10px 0; border:none; border-radius:25px; background:#2a2a2a; color:white; }
+#loginScreen button { width:100%; padding:12px; background:#2b5b8c; border:none; border-radius:25px; color:white; font-size:16px; cursor:pointer; }
+#loginScreen .switch { color:#4a9eff; cursor:pointer; margin-top:10px; display:inline-block; }
+
+/* --- Signup Screen --- */
+#signupScreen { display:none; width:100%; max-width:400px; padding:30px; background:#1a1a1a; border-radius:20px; text-align:center; color:white; }
+#signupScreen input { width:100%; padding:12px; margin:10px 0; border:none; border-radius:25px; background:#2a2a2a; color:white; }
+#signupScreen button { width:100%; padding:12px; background:#2b5b8c; border:none; border-radius:25px; color:white; font-size:16px; cursor:pointer; }
+#signupScreen .switch { color:#4a9eff; cursor:pointer; margin-top:10px; display:inline-block; }
+
+/* --- Chat Screen --- */
+#chatScreen { display:none; width:100%; max-width:400px; height:600px; background:#1a1a1a; border-radius:20px; flex-direction:column; overflow:hidden; }
+.header { background:#2a2a2a; padding:15px; color:white; font-weight:bold; text-align:center; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
+.header button { background:#c0392b; border:none; color:white; padding:6px 12px; border-radius:20px; cursor:pointer; }
+.msgs { flex:1; padding:15px; overflow-y:auto; background:#121212; display:flex; flex-direction:column; }
+.msg-wrapper { display:flex; align-items:center; margin:5px 0; position:relative; gap:8px; }
+.msg { padding:10px 14px; border-radius:18px; max-width:80%; word-wrap:break-word; }
+.customer { background:#2b5b8c; color:white; align-self:flex-start; border-bottom-left-radius:5px; }
+.admin { background:#3a3a3a; color:#e0e0e0; align-self:flex-end; border-bottom-right-radius:5px; }
+.file-msg { background:#2a2a2a; border:1px solid #444; padding:10px; border-radius:12px; }
+.file-msg a { color:#4a9eff; text-decoration:none; }
+.voice-note { background:#2a2a2a; border-radius:12px; padding:8px 14px; display:inline-flex; align-items:center; gap:10px; }
+.voice-note audio { max-width:180px; height:30px; }
+.msg-image { max-width:200px; border-radius:12px; margin:5px 0; }
+.delete-btn { background:transparent; border:none; color:#888; font-size:14px; cursor:pointer; padding:0 5px; }
+.delete-btn:hover { color:#ff4444; }
+.input-area { display:flex; flex-wrap:wrap; padding:10px; background:#1a1a1a; border-top:1px solid #333; gap:5px; }
+.input-area input[type="text"] { flex:1; padding:12px; border:none; border-radius:25px; background:#2a2a2a; color:white; outline:none; min-width:150px; }
+.input-area button { padding:12px 16px; background:#2b5b8c; color:white; border:none; border-radius:25px; cursor:pointer; }
+.input-area .icon-btn { background:#3a3a3a; padding:12px 14px; border-radius:25px; cursor:pointer; border:none; color:white; font-size:18px; }
+#fileInput, #imageInput { display:none; }
+.status { color:#666; font-size:12px; text-align:center; padding:5px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+    <h2>🔐 Login</h2>
+    <input type="text" id="loginUsername" placeholder="Username">
+    <input type="password" id="loginPassword" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <div class="switch" onclick="showSignup()">Don't have an account? Sign Up</div>
+</div>
+
+<!-- SIGNUP -->
+<div id="signupScreen">
+    <h2>📝 Sign Up</h2>
+    <input type="text" id="signupUsername" placeholder="Username">
+    <input type="password" id="signupPassword" placeholder="Password">
+    <button onclick="signup()">Create Account</button>
+    <div class="switch" onclick="showLogin()">Already have an account? Login</div>
+</div>
+
+<!-- CHAT -->
+<div id="chatScreen">
+    <div class="header">
+        <span>💬 Support</span>
+        <div>
+            <button onclick="clearAllMessages()" style="background:#e67e22;margin-right:5px;">🗑️ Clear</button>
+            <button onclick="logout()">Logout</button>
+        </div>
+    </div>
+    <div class="msgs" id="msgs"></div>
+    <div class="input-area">
+        <input type="text" id="input" placeholder="Type..." onkeypress="if(event.key==='Enter') send()">
+        <button onclick="send()">Send</button>
+        <button class="icon-btn" onclick="document.getElementById('imageInput').click()">🖼️</button>
+        <button class="icon-btn" onclick="document.getElementById('fileInput').click()">📎</button>
+        <button class="icon-btn" id="voiceBtn">🎙️</button>
+        <input type="file" id="fileInput" accept=".apk,.zip,.rar,.pdf" onchange="sendFile(event)">
+        <input type="file" id="imageInput" accept="image/*" onchange="sendImage(event)">
+    </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION
+// ============================================================
+const BOT_TOKEN = '8867880135:AAEaASt65xsXLo3a67q6HwOAsYzDyc6AHJA';
+const YOUR_CHAT_ID = '8797860417';
+const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+// ============================================================
+// AUTHENTICATION
+// ============================================================
+function getUsers() { return JSON.parse(localStorage.getItem('users') || '{}'); }
+function saveUsers(u) { localStorage.setItem('users', JSON.stringify(u)); }
+function getCurrentUser() { return localStorage.getItem('currentUser'); }
+function setCurrentUser(u) { localStorage.setItem('currentUser', u); }
+
+function login() {
+    const u = document.getElementById('loginUsername').value.trim();
+    const p = document.getElementById('loginPassword').value.trim();
+    const users = getUsers();
+    if (users[u] && users[u] === p) { setCurrentUser(u); showChat(); } 
+    else alert('Invalid credentials');
+}
+function signup() {
+    const u = document.getElementById('signupUsername').value.trim();
+    const p = document.getElementById('signupPassword').value.trim();
+    if (!u || !p) return alert('Fill all fields');
+    const users = getUsers();
+    if (users[u]) return alert('Username exists');
+    users[u] = p; saveUsers(users); setCurrentUser(u); showChat();
+}
+function showSignup() { document.getElementById('loginScreen').style.display='none'; document.getElementById('signupScreen').style.display='block'; }
+function showLogin() { document.getElementById('signupScreen').style.display='none'; document.getElementById('loginScreen').style.display='block'; }
+function logout() { localStorage.removeItem('currentUser'); location.reload(); }
+function showChat() {
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('signupScreen').style.display='none';
+    document.getElementById('chatScreen').style.display='flex';
+    loadSavedMessages();
+    check();
+}
+
+// ============================================================
+// CHAT LOGIC (STORAGE + DELETE)
+// ============================================================
+function getStorageKey() { return 'chatMessages_' + getCurrentUser(); }
+
+// Save a message with a unique ID
+function saveMessage(type, text, isFile = false) {
+    const key = getStorageKey();
+    let msgs = JSON.parse(localStorage.getItem(key) || '[]');
+    const id = Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+    msgs.push({ id, type, text, isFile, timestamp: Date.now() });
+    if (msgs.length > 500) msgs = msgs.slice(-500); // Prevent overload
+    localStorage.setItem(key, JSON.stringify(msgs));
+}
+
+// Load all messages and render them
+function loadSavedMessages() {
+    const el = document.getElementById('msgs');
+    el.innerHTML = '';
+    const key = getStorageKey();
+    const msgs = JSON.parse(localStorage.getItem(key) || '[]');
+    msgs.forEach(msg => {
+        renderMessage(msg.id, msg.type, msg.text, msg.isFile || false);
+    });
+}
+
+// Render a single message (adds delete button)
+function renderMessage(id, type, text, isFile) {
+    const el = document.getElementById('msgs');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'msg-wrapper';
+    wrapper.dataset.id = id;
+
+    const d = document.createElement('div');
+    d.className = 'msg ' + type;
+
+    if (isFile) {
+        if (text.match(/\.(jpg|jpeg|png|gif|webp)\??/i)) {
+            d.innerHTML = `<img src="${text}" class="msg-image" alt="image">`;
+            d.style.background = 'transparent';
+            d.style.padding = '0';
+        } else if (text.includes('voice.ogg') || text.includes('.ogg')) {
+            d.innerHTML = `<div class="voice-note">🎙️ <audio controls src="${text}"></audio></div>`;
+            d.style.background = 'transparent';
+            d.style.padding = '0';
+        } else {
+            d.innerHTML = `<div class="file-msg">📦 <a href="${text}" target="_blank">Download File</a></div>`;
+            d.style.background = 'transparent';
+            d.style.padding = '0';
+        }
+    } else {
+        d.textContent = (type === 'customer' ? '👤 ' : '🛡️ ') + text;
+    }
+
+    wrapper.appendChild(d);
+
+    // Delete button
+    const del = document.createElement('button');
+    del.className = 'delete-btn';
+    del.textContent = '✕';
+    del.onclick = function(e) {
+        e.stopPropagation();
+        deleteMessageById(id);
+    };
+    wrapper.appendChild(del);
+    el.appendChild(wrapper);
+    el.scrollTop = el.scrollHeight;
+}
+
+// Delete message by ID
+function deleteMessageById(id) {
+    const key = getStorageKey();
+    let msgs = JSON.parse(localStorage.getItem(key) || '[]');
+    msgs = msgs.filter(msg => msg.id !== id);
+    localStorage.setItem(key, JSON.stringify(msgs));
+    // Re-render the entire chat to stay in sync
+    loadSavedMessages();
+}
+
+// Clear all messages for this user
+function clearAllMessages() {
+    if (confirm('Delete ALL messages permanently?')) {
+        localStorage.removeItem(getStorageKey());
+        loadSavedMessages();
+    }
+}
+
+// Add message (used by send functions and incoming replies)
+function addMsg(type, text, isFile = false, save = true) {
+    // Remove status message if present
+    const el = document.getElementById('msgs');
+    const s = el.querySelector('.status');
+    if (s) s.remove();
+
+    if (save) {
+        // Save to storage first, then re-render everything to ensure order
+        const key = getStorageKey();
+        let msgs = JSON.parse(localStorage.getItem(key) || '[]');
+        const id = Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+        msgs.push({ id, type, text, isFile, timestamp: Date.now() });
+        if (msgs.length > 500) msgs = msgs.slice(-500);
+        localStorage.setItem(key, JSON.stringify(msgs));
+        loadSavedMessages();
+    } else {
+        // For loading existing messages without re-saving (used in loadSavedMessages)
+        renderMessage('dummy_' + Date.now(), type, text, isFile);
+    }
+}
+
+// Download helper
+function downloadFile(url) { window.open(url, '_blank'); }
+
+// ============================================================
+// SEND FUNCTIONS
+// ============================================================
+function send() {
+    const input = document.getElementById('input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    addMsg('customer', msg);
+    input.value = '';
+    fetch(`${API}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: YOUR_CHAT_ID, text: `${getCurrentUser()}: ${msg}` })
+    });
+}
+
+function sendImage(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('photo', file);
+    fd.append('chat_id', YOUR_CHAT_ID);
+    addMsg('customer', '🖼️ Sending image...');
+    fetch(`${API}/sendPhoto`, { method: 'POST', body: fd });
+    e.target.value = '';
+}
+
+function sendFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('document', file);
+    fd.append('chat_id', YOUR_CHAT_ID);
+    addMsg('customer', '📎 Sending ' + file.name);
+    fetch(`${API}/sendDocument`, { method: 'POST', body: fd });
+    e.target.value = '';
+}
+
+// Voice Recording
+let mediaRecorder, audioChunks = [];
+document.getElementById('voiceBtn').addEventListener('click', function() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        this.textContent = '🎙️';
+        this.style.background = '#3a3a3a';
+        return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(audioChunks, { type: 'audio/ogg' });
+                const file = new File([blob], 'voice.ogg', { type: 'audio/ogg' });
+                const fd = new FormData();
+                fd.append('voice', file);
+                fd.append('chat_id', YOUR_CHAT_ID);
+                addMsg('customer', '🎙️ Voice note sent');
+                fetch(`${API}/sendVoice`, { method: 'POST', body: fd });
+                stream.getTracks().forEach(t => t.stop());
+            };
+            mediaRecorder.start();
+            this.textContent = '⏹️';
+            this.style.background = '#c0392b';
+        })
+        .catch(() => alert('Please allow microphone access.'));
+});
+
+// ============================================================
+// RECEIVE MESSAGES (from Telegram)
+// ============================================================
+let lastId = 0;
+let seen = new Set();
+
+function check() {
+    fetch(`${API}/getUpdates?offset=${lastId+1}`)
+        .then(r => r.json())
+        .then(d => {
+            if (!d.ok || !d.result) return;
+            d.result.forEach(u => {
+                if (u.update_id > lastId) lastId = u.update_id;
+                const m = u.message;
+                if (!m) return;
+                if (m.from && m.from.id.toString() === YOUR_CHAT_ID.toString()) {
+                    // Text
+                    if (m.text) {
+                        const key = m.text + m.date;
+                        if (!seen.has(key)) { seen.add(key); addMsg('admin', m.text); }
+                    }
+                    // Voice
+                    if (m.voice) {
+                        fetch(`${API}/getFile?file_id=${m.voice.file_id}`)
+                            .then(r => r.json())
+                            .then(fd => {
+                                const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fd.result.file_path}`;
+                                const key = 'voice_' + m.voice.file_id + m.date;
+                                if (!seen.has(key)) { seen.add(key); addMsg('admin', url, true); }
+                            });
+                    }
+                    // Photo
+                    if (m.photo) {
+                        const fileId = m.photo[m.photo.length - 1].file_id;
+                        fetch(`${API}/getFile?file_id=${fileId}`)
+                            .then(r => r.json())
+                            .then(fd => {
+                                const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fd.result.file_path}`;
+                                const key = 'photo_' + fileId + m.date;
+                                if (!seen.has(key)) { seen.add(key); addMsg('admin', url, true); }
+                            });
+                    }
+                    // Document (APK, etc)
+                    if (m.document) {
+                        fetch(`${API}/getFile?file_id=${m.document.file_id}`)
+                            .then(r => r.json())
+                            .then(fd => {
+                                const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fd.result.file_path}`;
+                                const key = 'doc_' + m.document.file_id + m.date;
+                                if (!seen.has(key)) { seen.add(key); addMsg('admin', url, true); }
+                            });
+                    }
+                }
+            });
+        });
+}
+
+// ============================================================
+// INIT
+// ============================================================
+if (getCurrentUser()) { showChat(); }
+else { document.getElementById('loginScreen').style.display = 'block'; }
+
+setInterval(check, 3000);
+</script>
+</body>
+  </html>
